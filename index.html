@@ -1,377 +1,333 @@
+<?php require_once __DIR__ . '/includes/i18n.php'; ?>
+
+<?php
+require_once __DIR__ . '/includes/data.php';
+$events = load_events_all();
+
+// ===== حسابات عامة =====
+$total = count($events);
+$catsCount = []; $locs = []; $titles = [];
+$today = strtotime(date('Y-m-d'));
+$weekTo = strtotime('+7 days', $today);
+
+foreach ($events as $e) {
+  // عدّادات تصنيفات/أماكن/عناوين
+  if (!empty($e['category'])) $catsCount[$e['category']] = ($catsCount[$e['category']] ?? 0) + 1;
+  if (!empty($e['location'])) $locs[$e['location']] = true;
+  if (!empty($e['title']))    $titles[] = $e['title'];
+}
+
+// القادمة
+$upcomingAll = array_values(array_filter($events, function($e) use ($today){
+  $ts = !empty($e['event_date']) ? strtotime($e['event_date']) : 0;
+  return $ts && $ts >= $today;
+}));
+usort($upcomingAll, fn($a,$b)=> strcmp($a['event_date'],$b['event_date']));
+$upcomingCount = count($upcomingAll);
+
+// المميّزة (سلايدر) = أقرب 3
+$featured = array_slice($upcomingAll, 0, 3);
+
+// هذا الأسبوع (حتى +7 أيام)
+$upcomingWeek = array_values(array_filter($upcomingAll, function($e) use ($weekTo){
+  $ts = !empty($e['event_date']) ? strtotime($e['event_date']) : 0;
+  return $ts && $ts <= $weekTo;
+}));
+$upcomingWeek = array_slice($upcomingWeek, 0, 6);
+
+// الأحدث (آخر 8 بالتاريخ تنازلي)
+$latest = $events;
+usort($latest, fn($a,$b)=> strcmp($b['event_date'], $a['event_date']));
+$latest = array_slice($latest, 0, 8);
+
+// بيانات إضافية
+$catCount = count($catsCount);
+$locCount = count($locs);
+
+// أسماء الفريق (للتذييل)
+$TEAM = "Amer_258506 (C3) • Aya_270191 (C3) • Hasan_322384 (C5) • May_195978 (C3) • Shaden_241560 (C3)";
+?>
 <!doctype html>
 <html lang="ar" dir="rtl">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title data-i18n="page.index.title">الرئيسية</title>
-    <meta name="description" content="اكتشف أحدث فعاليات المدينة حسب التصنيف والتاريخ.">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>فعاليات مدينتي — الصفحة الرئيسية</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+  <script>(function(){try{var t=localStorage.getItem('theme')||'light';if(t==='auto'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-bs-theme',t);}catch(e){}})();</script>
 
-    <!-- Tajawal font -->
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet" />
-
-    <!-- Bootstrap RTL -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet" />
-
-    <!-- Your stylesheet (lowercase path) -->
-    <link rel="stylesheet" href="assets/css/style.css" />
-
-    <style>
-        :root {
-            --brand: #144897;
-            --muted: #6b6b6b;
-            --surface: #f8f9fa;
-        }
-
-        body {
-            font-family: "Tajawal", system-ui, sans-serif;
-            color: #212529;
-            background: #fff;
-        }
-
-        .navbar {
-            background: linear-gradient(135deg, #e2dee7 0%, #0501ec 100%);
-        }
-
-        .navbar .nav-link,
-        .navbar .navbar-brand {
-            color: #0b05b3 !important;
-        }
-
-        .navbar .nav-link:hover {
-            text-decoration: underline;
-        }
-
-        /* Hero */
-        .hero {
-            min-height: 56svh;
-            background: linear-gradient(180deg, rgba(20, 72, 151, .45), rgba(20, 72, 151, .65)), url("assets/img/m1.jpg") center/cover no-repeat;
-            color: #fff;
-        }
-
-        /* Carousel controls visible on dark images */
-        .carousel-control-prev-icon,
-        .carousel-control-next-icon {
-            filter: invert(100%);
-        }
-
-        /* Cards */
-        .card-title {
-            color: var(--brand);
-            font-weight: 700;
-        }
-
-        /* Footer */
-        footer.footer {
-            background: #0d1b2a;
-            color: #fff;
-        }
-
-        footer a {
-            color: #cfd8ff;
-        }
-
-        footer a:hover {
-            color: #fff;
-            text-decoration: underline;
-        }
-    </style>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  
+  <style>
+    .hero {
+      background: radial-gradient(1200px 300px at 50% -50%, rgba(13,110,253,.15), transparent),
+                  linear-gradient(180deg, #f8fafc, #fff);
+    }
+    .stat-card { border: 1px solid rgba(0,0,0,.06); }
+    .cat-chip { border:1px solid rgba(0,0,0,.08); background:#fff; }
+  </style>
 </head>
-
 <body>
 
-    <!-- Navbar + Language toggle -->
-    <nav class="navbar navbar-expand-lg shadow-sm">
-        <div class="container">
-            <a class="navbar-brand fw-bold" href="index.html" data-i18n="nav.brand">دليل الفعاليات</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div id="nav" class="collapse navbar-collapse">
-                <ul class="navbar-nav ms-auto align-items-lg-center">
-                    <li class="nav-item"><a class="nav-link active" href="index.html" data-i18n="nav.home">الرئيسية</a>
-                    </li>
-                    <li class="nav-item"><a class="nav-link" href="events.html" data-i18n="nav.events">كل الفعاليات</a>
-                    </li>
-                    <li class="nav-item"><a class="nav-link" href="about.html" data-i18n="nav.about">عن الدليل</a></li>
-                    <li class="nav-item"><a class="nav-link" href="contact.html" data-i18n="nav.contact">اتصل بنا</a>
-                    </li>
-                </ul>
-                <div class="d-flex align-items-center gap-2 ms-lg-3">
-                    <button id="langAr" type="button" class="btn btn-sm btn-outline-secondary"
-                        aria-label="العربية">ع</button>
-                    <button id="langEn" type="button" class="btn btn-sm btn-outline-secondary"
-                        aria-label="English">EN</button>
-                </div>
-            </div>
-        </div>
-    </nav>
+<!-- Navbar -->
+<?php // partials_nav.php
+require_once __DIR__.'/includes/i18n.php'; ?>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container">
+    <a class="navbar-brand fw-bold d-flex align-items-center" href="index.php">
+      <img src="assets/img/logo.png" alt="logo" class="me-2" style="height:36px">
+      <?= t('brand') ?>
+    </a>
+    <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#nav"><span class="navbar-toggler-icon"></span></button>
+    <div id="nav" class="collapse navbar-collapse">
+      <ul class="navbar-nav ms-auto align-items-lg-center gap-lg-2">
+        <li class="nav-item"><a class="nav-link" href="index.php"><?= t('nav_home') ?></a></li>
+        <li class="nav-item"><a class="nav-link" href="events.php"><?= t('nav_events') ?></a></li>
+        <li class="nav-item"><a class="nav-link" href="about.php"><?= t('nav_about') ?></a></li>
+        <li class="nav-item"><a class="nav-link" href="contact.php"><?= t('nav_contact') ?></a></li>
 
-    <!-- Hero -->
-    <header class="hero d-flex align-items-center text-center">
-        <div class="container py-5">
-            <h1 class="display-5 fw-bold mb-2" data-i18n="hero.title">فعاليات مدينتك بين يديك</h1>
-            <p class="lead mb-4" data-i18n="hero.subtitle">استكشف، صفِّ حسب التصنيف والتاريخ، وتابع أبرز الأحداث القادمة
-            </p>
-            <a href="events.html" class="btn btn-light btn-lg fw-semibold" data-i18n="hero.cta">استكشاف الفعاليات</a>
-        </div>
-    </header>
+        <!-- اللغة -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">🌐 <?= t('lang') ?></a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="<?= lang_switch_url('ar') ?>">🇸🇦 <?= t('ar') ?></a></li>
+            <li><a class="dropdown-item" href="<?= lang_switch_url('en') ?>">🇬🇧 <?= t('en') ?></a></li>
+          </ul>
+        </li>
 
-    <!-- Featured Carousel -->
-    <section class="container py-5">
-        <h2 class="h4 mb-3">فعاليات مميزة</h2>
-        <div id="highlightCarousel" class="carousel slide" data-bs-ride="carousel">
-            <div class="carousel-inner rounded-4 overflow-hidden">
-                <div class="carousel-item active">
-                    <img src="assets/img/event1.jpg" class="d-block w-100" alt="مهرجان الموسيقى العربية" loading="lazy"
-                        decoding="async">
-                    <div class="carousel-caption d-none d-md-block">
-                        <h5>مهرجان الموسيقى العربية</h5>
-                        <p class="small">موسيقى • عمّان</p>
-                    </div>
-                </div>
-                <div class="carousel-item">
-                    <img src="assets/img/event2.jpg" class="d-block w-100" alt="سباق الجري" loading="lazy"
-                        decoding="async">
-                    <div class="carousel-caption d-none d-md-block">
-                        <h5>سباق الجري</h5>
-                        <p class="small">رياضة • العقبة</p>
-                    </div>
-                </div>
-                <div class="carousel-item">
-                    <img src="assets/img/event3.jpg" class="d-block w-100" alt="معرض الكتاب" loading="lazy"
-                        decoding="async">
-                    <div class="carousel-caption d-none d-md-block">
-                        <h5>معرض الكتاب السنوي</h5>
-                        <p class="small">ثقافة • إربد</p>
-                    </div>
-                </div>
-                <div class="carousel-item">
-                    <img src="assets/img/event4.jpg" class="d-block w-100" alt="يوم العائلة" loading="lazy"
-                        decoding="async">
-                    <div class="carousel-caption d-none d-md-block">
-                        <h5>يوم العائلة في الحديقة</h5>
-                        <p class="small">عائلي • الزرقاء</p>
-                    </div>
-                </div>
-            </div>
+        <!-- الثيم -->
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">🌓 <?= t('theme') ?></a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><button class="dropdown-item theme-opt" data-theme="light">☀️ <?= t('light') ?></button></li>
+            <li><button class="dropdown-item theme-opt" data-theme="dark">🌙 <?= t('dark') ?></button></li>
+            <li><button class="dropdown-item theme-opt" data-theme="auto">⚙️ <?= t('auto') ?></button></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
 
-            <button class="carousel-control-prev" type="button" data-bs-target="#highlightCarousel"
-                data-bs-slide="prev">
-                <span class="carousel-control-prev-icon"></span>
-                <span class="visually-hidden">السابق</span>
-            </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#highlightCarousel"
-                data-bs-slide="next">
-                <span class="carousel-control-next-icon"></span>
-                <span class="visually-hidden">التالي</span>
-            </button>
-        </div>
-    </section>
 
-    <!-- Quick Categories -->
-    <section class="container pb-4">
-        <h2 class="h4 mb-3">أقسام الفعاليات</h2>
+<!-- Hero + Search + Stats -->
+<header class="hero border-bottom py-5">
+  <div class="container">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <h1 class="display-6 fw-bold mb-3">اكتشف ما يحدث في مدينتك اليوم</h1>
+        <p class="lead text-muted">موسيقى، رياضة، ثقافة، وأنشطة عائلية — ابحث بسرعة وحدّد ما يلائمك.</p>
+
+        <!-- نموذج بحث سريع يوجّه إلى events.php -->
+        <form action="events.php" method="get" class="row g-2 align-items-end">
+          <div class="col-md-6">
+            <label class="form-label">ابحث بالعنوان/الوصف</label>
+            <input list="eventTitles" type="text" class="form-control" name="q" placeholder="مثال: كورال، ماراثون">
+            <datalist id="eventTitles">
+              <?php
+                // اقتراحات عناوين (حتى 50)
+                $seen = [];
+                foreach ($titles as $t) {
+                  $t = trim($t);
+                  if ($t !== '' && !isset($seen[$t])) { $seen[$t]=1; echo '<option value="'.htmlentities($t).'">'; }
+                  if (count($seen) >= 50) break;
+                }
+              ?>
+            </datalist>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">التصنيف</label>
+            <select class="form-select" name="category">
+              <option value="">الكل</option>
+              <?php foreach (['موسيقى','رياضة','ثقافة','عائلي'] as $c): ?>
+                <option><?= htmlentities($c) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="col-md-2 d-grid">
+            <button class="btn btn-primary">بحث</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="col-lg-5">
         <div class="row g-3">
-            <div class="col-6 col-md-3">
-                <a href="events.html" class="card text-center h-100 text-decoration-none">
-                    <div class="card-body">
-                        <div class="display-6">🎵</div>
-                        <h3 class="h6 mt-2 mb-0" data-i18n="cat.music">موسيقى</h3>
-                    </div>
-                </a>
+          <div class="col-6">
+            <div class="p-3 rounded-3 bg-white shadow-sm stat-card text-center">
+              <div class="h3 mb-1" data-counter="<?= (int)$total ?>">0</div>
+              <div class="text-muted small">فعالية مُسجّلة</div>
             </div>
-            <div class="col-6 col-md-3">
-                <a href="events.html" class="card text-center h-100 text-decoration-none">
-                    <div class="card-body">
-                        <div class="display-6">📚</div>
-                        <h3 class="h6 mt-2 mb-0" data-i18n="cat.culture">ثقافة</h3>
-                    </div>
-                </a>
+          </div>
+          <div class="col-6">
+            <div class="p-3 rounded-3 bg-white shadow-sm stat-card text-center">
+              <div class="h3 mb-1" data-counter="<?= (int)$upcomingCount ?>">0</div>
+              <div class="text-muted small">قادمة</div>
             </div>
-            <div class="col-6 col-md-3">
-                <a href="events.html" class="card text-center h-100 text-decoration-none">
-                    <div class="card-body">
-                        <div class="display-6">⚽</div>
-                        <h3 class="h6 mt-2 mb-0" data-i18n="cat.sport">رياضة</h3>
-                    </div>
-                </a>
+          </div>
+          <div class="col-6">
+            <div class="p-3 rounded-3 bg-white shadow-sm stat-card text-center">
+              <div class="h3 mb-1" data-counter="<?= (int)$catCount ?>">0</div>
+              <div class="text-muted small">تصنيف</div>
             </div>
-            <div class="col-6 col-md-3">
-                <a href="events.html" class="card text-center h-100 text-decoration-none">
-                    <div class="card-body">
-                        <div class="display-6">👨‍👩‍👧‍👦</div>
-                        <h3 class="h6 mt-2 mb-0" data-i18n="cat.family">عائلي</h3>
-                    </div>
-                </a>
+          </div>
+          <div class="col-6">
+            <div class="p-3 rounded-3 bg-white shadow-sm stat-card text-center">
+              <div class="h3 mb-1" data-counter="<?= (int)$locCount ?>">0</div>
+              <div class="text-muted small">مكان</div>
             </div>
+          </div>
         </div>
-    </section>
+      </div>
+    </div>
 
-    <!-- Latest Events Grid -->
-    <section class="container pb-5">
-        <h2 class="h4 mb-3">أحدث الفعاليات</h2>
-        <div class="row g-3">
-            <!-- استخدمنا صورًا موجودة في مجلدك -->
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new1.webp" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">أمسية موسيقية شبابية</h5>
-                        <p class="small text-muted mb-2">موسيقى • عمّان</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
+    <?php // سلايدر مميّز لأقرب 3 فعاليات ?>
+    <div class="row mt-4">
+      <div class="col-12">
+        <div id="hero" class="carousel slide" data-bs-ride="carousel">
+          <div class="carousel-inner">
+            <?php if ($featured): $i=0; foreach ($featured as $e): 
+              $img = !empty($e['image']) ? 'assets/img/'.htmlentities($e['image']) : 'assets/img/placeholder-hero.jpg';
+              $active = $i===0 ? 'active' : ''; $i++;
+            ?>
+            <div class="carousel-item <?= $active ?>">
+              <img src="<?= $img ?>" class="d-block w-100 rounded-3 shadow-sm" alt="">
+              <div class="carousel-caption d-none d-md-block">
+                <h5 class="mb-1"><?= htmlentities($e['title']) ?></h5>
+                <p class="small"><?= htmlentities($e['location']) ?> • <?= htmlentities($e['event_date']) ?></p>
+                <a href="event.php?id=<?= urlencode($e['id']) ?>" class="btn btn-primary btn-sm">التفاصيل</a>
+              </div>
             </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new2.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">بازار الحرف اليدوية</h5>
-                        <p class="small text-muted mb-2">ثقافة • عمّان</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
+            <?php endforeach; else: ?>
+              <div class="carousel-item active">
+                <img src="assets/img/placeholder-hero.jpg" class="d-block w-100 rounded-3 shadow-sm" alt="">
+                <div class="carousel-caption d-none d-md-block">
+                  <h5>سيظهر هنا أبرز فعالية حال توفر بيانات قادمة</h5>
                 </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new4.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">جولة دراجات صباحية</h5>
-                        <p class="small text-muted mb-2">رياضة • مادبا</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new5.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">سينما في الهواء الطلق</h5>
-                        <p class="small text-muted mb-2">عائلي • السلط</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new6.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">محاضرة تاريخية</h5>
-                        <p class="small text-muted mb-2">ثقافة • إربد</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/new7.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">مسابقة مواهب صغار</h5>
-                        <p class="small text-muted mb-2">عائلي • الزرقاء</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/m2.jpg" class="card-img-top" alt="حدث جديد" loading="lazy" decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">أوركسترا أمسيات الشتاء</h5>
-                        <p class="small text-muted mb-2">موسيقى • عمّان</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-sm-6 col-lg-3">
-                <div class="card h-100 shadow-sm border-0">
-                    <img src="assets/img/event3.jpg" class="card-img-top" alt="حدث جديد" loading="lazy"
-                        decoding="async">
-                    <div class="card-body">
-                        <h5 class="card-title">نادي قراءة: قصص قصيرة</h5>
-                        <p class="small text-muted mb-2">ثقافة • عمّان</p>
-                        <a href="event.html" class="btn btn-outline-primary btn-sm" data-i18n="btn.details">التفاصيل</a>
-                    </div>
-                </div>
-            </div>
+              </div>
+            <?php endif; ?>
+          </div>
+          <button class="carousel-control-prev" type="button" data-bs-target="#hero" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+          <button class="carousel-control-next" type="button" data-bs-target="#hero" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
         </div>
-    </section>
+      </div>
+    </div>
+  </div>
+</header>
 
-    <!-- Footer -->
-    <footer class="footer mt-auto pt-5">
-        <div class="container">
-            <div class="row g-4">
-                <div class="col-12 col-md-4">
-                    <h5 class="fw-bold" data-i18n="nav.brand">دليل الفعاليات</h5>
-                    <p class="small text-secondary mb-2">منصّة لعرض فعاليات مدينتك بتصميم متجاوب وبسيط.</p>
-                    <ul class="list-unstyled small">
-                        <li class="mb-1">البريد: <a class="link-light link-opacity-75"
-                                href="mailto:info@example.com">info@example.com</a></li>
-                        <li class="mb-1">الهاتف: <a class="link-light link-opacity-75"
-                                href="tel:+962000000">+962-000000</a></li>
-                        <li class="mb-1">العنوان: وسط المدينة، عمّان</li>
-                    </ul>
-                </div>
-                <div class="col-6 col-md-2">
-                    <h6 class="text-uppercase small">روابط</h6>
-                    <ul class="list-unstyled">
-                        <li><a class="link-light link-opacity-75" href="index.html" data-i18n="nav.home">الرئيسية</a>
-                        </li>
-                        <li><a class="link-light link-opacity-75" href="events.html" data-i18n="nav.events">كل
-                                الفعاليات</a></li>
-                        <li><a class="link-light link-opacity-75" href="about.html" data-i18n="nav.about">عن الدليل</a>
-                        </li>
-                        <li><a class="link-light link-opacity-75" href="contact.html" data-i18n="nav.contact">اتصل
-                                بنا</a></li>
-                    </ul>
-                </div>
-                <div class="col-6 col-md-2">
-                    <h6 class="text-uppercase small">التصنيفات</h6>
-                    <ul class="list-unstyled">
-                        <li><a class="link-light link-opacity-75" href="events.html" data-i18n="cat.music">موسيقى</a>
-                        </li>
-                        <li><a class="link-light link-opacity-75" href="events.html" data-i18n="cat.culture">ثقافة</a>
-                        </li>
-                        <li><a class="link-light link-opacity-75" href="events.html" data-i18n="cat.sport">رياضة</a>
-                        </li>
-                        <li><a class="link-light link-opacity-75" href="events.html" data-i18n="cat.family">عائلي</a>
-                        </li>
-                    </ul>
-                </div>
-                <div class="col-12 col-md-4">
-                    <h6 class="text-uppercase small">النشرة البريدية</h6>
-                    <form id="newsletter" class="input-group">
-                        <input type="email" class="form-control" data-i18n-placeholder="ph.email"
-                            placeholder="بريدك الإلكتروني" required>
-                        <button class="btn btn-primary">اشترك</button>
-                    </form>
-                    <div id="newsAlert" class="alert alert-success mt-2 d-none" role="alert">تم الاشتراك بنجاح (تجريبي)
-                    </div>
-                </div>
+<!-- التصنيفات الشائعة -->
+<section class="py-4">
+  <div class="container">
+    <h2 class="h5 mb-3">التصنيفات الشائعة</h2>
+    <div class="d-flex flex-wrap gap-2">
+      <?php
+        // ترتيب التصنيفات تنازليًا حسب العدد
+        arsort($catsCount);
+        if ($catsCount) {
+          foreach ($catsCount as $cat=>$cnt) {
+            echo '<a class="btn cat-chip btn-sm" href="events.php?category='.urlencode($cat).'">'.
+                 htmlentities($cat).' <span class="badge bg-secondary ms-1">'.$cnt.'</span></a>';
+          }
+        } else {
+          echo '<span class="text-muted">لا توجد تصنيفات بعد.</span>';
+        }
+      ?>
+    </div>
+  </div>
+</section>
+
+<!-- قريبًا هذا الأسبوع -->
+<section class="py-5 border-top">
+  <div class="container">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <h2 class="h5 mb-0">قريبًا هذا الأسبوع</h2>
+      <a href="events.php?date_from=<?= date('Y-m-d') ?>&date_to=<?= date('Y-m-d', $weekTo) ?>" class="btn btn-outline-primary btn-sm">عرض المزيد</a>
+    </div>
+    <div class="row g-3">
+      <?php if ($upcomingWeek): foreach ($upcomingWeek as $row):
+        $img = !empty($row['image']) ? 'assets/img/'.htmlentities($row['image']) : 'assets/img/placeholder-card.jpg';
+      ?>
+        <div class="col-12 col-md-6 col-lg-4">
+          <div class="card h-100 shadow-sm">
+            <img src="<?= $img ?>" class="card-img-top" alt="">
+            <div class="card-body">
+              <span class="badge bg-secondary mb-2"><?= htmlentities($row['category']) ?></span>
+              <h5 class="card-title"><?= htmlentities($row['title']) ?></h5>
+              <p class="card-text small text-muted">📍 <?= htmlentities($row['location']) ?> • 🗓️ <?= htmlentities($row['event_date']) ?></p>
+              <div class="d-flex gap-2">
+                <a href="event.php?id=<?= urlencode($row['id']) ?>" class="btn btn-primary btn-sm">التفاصيل</a>
+                <a href="ics.php?id=<?= urlencode($row['id']) ?>" class="btn btn-outline-secondary btn-sm">أضِف للتقويم</a>
+              </div>
             </div>
-            <hr class="border-secondary my-4">
-            <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center small pb-3">
-                <span>© 2025 <span data-i18n="nav.brand">دليل الفعاليات</span></span>
-                <div class="d-flex gap-3">
-                    <a class="link-light link-opacity-75" href="#">سياسة الخصوصية</a>
-                    <a class="link-light link-opacity-75" href="#">الشروط</a>
-                    <a class="link-light link-opacity-75" href="#" id="toTop" data-i18n="footer.backTop">العودة للأعلى
-                        ↑</a>
-                </div>
-            </div>
+          </div>
         </div>
-    </footer>
+      <?php endforeach; else: ?>
+        <div class="col-12"><div class="alert alert-info">لا توجد فعاليات قريبة خلال هذا الأسبوع.</div></div>
+      <?php endif; ?>
+    </div>
+  </div>
+</section>
 
-    <!-- Bootstrap + Main JS (lowercase path) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/main.js"></script>
+<!-- أحدث الفعاليات -->
+<section class="py-5 border-top">
+  <div class="container">
+    <h2 class="h5 mb-4">أحدث الفعاليات</h2>
+    <div class="row g-3">
+      <?php if (empty($latest)): ?>
+        <div class="col-12"><div class="alert alert-warning">لا توجد فعاليات حالياً.</div></div>
+      <?php else: foreach ($latest as $row): 
+        $img = !empty($row['image']) ? 'assets/img/'.htmlentities($row['image']) : 'assets/img/placeholder-card.jpg';
+      ?>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card h-100 shadow-sm">
+          <img src="<?= $img ?>" class="card-img-top" alt="">
+          <div class="card-body">
+            <span class="badge bg-secondary mb-2"><?= htmlentities($row['category']) ?></span>
+            <h5 class="card-title"><?= htmlentities($row['title']) ?></h5>
+            <p class="card-text small text-muted"><?= htmlentities($row['location']) ?> • <?= htmlentities($row['event_date']) ?></p>
+            <a href="event.php?id=<?= urlencode($row['id']) ?>" class="btn btn-outline-primary btn-sm">التفاصيل</a>
+          </div>
+        </div>
+      </div>
+      <?php endforeach; endif; ?>
+    </div>
+
+    <div class="text-center mt-4">
+      <a href="events.php" class="btn btn-primary">تصفّح كل الفعاليات</a>
+      <a href="contact.php" class="btn btn-outline-secondary ms-2">لديك فعالية؟ أرسلها لنا</a>
+    </div>
+  </div>
+</section>
+
+<footer class="bg-dark text-white-50 py-4">
+  <div class="container small d-flex flex-column flex-md-row justify-content-between">
+    <div><strong>فريق المشروع:</strong> <?= $TEAM ?></div>
+    <div>&copy; <?= date("Y") ?> فعاليات مدينتي</div>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// عدادات متحركة بسيطة (نفس أسلوب about)
+document.addEventListener('DOMContentLoaded', () => {
+  const els = document.querySelectorAll('[data-counter]');
+  if (!els.length) return;
+  const animate = el => {
+    const target = parseInt(el.getAttribute('data-counter') || '0', 10);
+    let cur = 0;
+    const step = Math.max(1, Math.round(target / 60));
+    const tick = () => {
+      cur += step;
+      if (cur >= target) { el.textContent = target; return; }
+      el.textContent = cur;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  };
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { animate(e.target); io.unobserve(e.target); } });
+  }, {threshold: .4});
+  els.forEach(el => io.observe(el));
+});
+</script>
 </body>
-
 </html>
